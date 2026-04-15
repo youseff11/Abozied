@@ -1,8 +1,10 @@
 import requests
 import base64
 import logging
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes, parser_classes
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser
 from .models import Statue, SearchHistory
 from .serializers import StatueSerializer
 
@@ -14,10 +16,12 @@ ROBOFLOW_API_KEY = "0Q95f8rFPiohq2RfJuR9"
 MODEL_ID = "egyptian-statues/4" 
 
 @api_view(['POST'])
+@permission_classes([IsAuthenticated]) # أضفنا دي عشان نضمن إن اللي بيبحث لازم يكون عامل Login
+@parser_classes([MultiPartParser, FormParser]) # لضمان معالجة الصور المرفوعة من Flutter بشكل صحيح
 def predict_artifact(request):
     """
     تستلم الصورة، ترسلها لـ Roboflow، تبحث عن النتيجة في الداتابيز، 
-    ثم تسجل العملية في سجل البحث.
+    وتسجل العملية في سجل البحث الخاص بالمستخدم الحالي.
     """
     
     # 1. التأكد من وجود ملف الصورة
@@ -47,7 +51,7 @@ def predict_artifact(request):
 
             if predictions:
                 top = predictions[0]
-                label_name = top['class'] # الاسم اللي راجع من الموديل (مثلاً Tutankhamun)
+                label_name = top['class']
                 confidence = top['confidence'] * 100
                 
                 # فلترة الهبد
@@ -60,24 +64,22 @@ def predict_artifact(request):
                 # 3. البحث عن بيانات التمثال في الداتابيز
                 try:
                     statue_obj = Statue.objects.get(name=label_name)
-                    # تحويل بيانات الموديل لـ JSON باستخدام السيرياليزر
                     statue_data = StatueSerializer(statue_obj).data
                     
                     # 4. تسجيل العملية في السجل (Search History) 
-                    # ملحوظة: لو اليوزر مش عامل login هنخلي اليوزر null مؤقتاً
-                    if request.user.is_authenticated:
-                        SearchHistory.objects.create(
-                            user=request.user,
-                            statue=statue_obj,
-                            image_searched=image_file,
-                            confidence=confidence
-                        )
+                    # بما أننا استخدمنا IsAuthenticated، فـ request.user مضمون وجوده
+                    SearchHistory.objects.create(
+                        user=request.user,
+                        statue=statue_obj,
+                        image_searched=image_file,
+                        confidence=confidence
+                    )
 
                     return Response({
                         "success": True,
                         "label": label_name,
                         "confidence": round(confidence, 1),
-                        "data": statue_data # البيانات كاملة من الداتابيز (عربي، عصر، وصف)
+                        "data": statue_data
                     }, status=200)
 
                 except Statue.DoesNotExist:
@@ -88,7 +90,7 @@ def predict_artifact(request):
             
             return Response({"success": False, "message": "لم يتم العثور على نتائج."}, status=200)
 
-        return Response({"success": False, "message": "API Error"}, status=500)
+        return Response({"success": False, "message": "API Error from Roboflow"}, status=500)
 
     except Exception as e:
         logger.error(f"Error: {str(e)}")
