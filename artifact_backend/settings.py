@@ -10,22 +10,16 @@ DEBUG = True
 ALLOWED_HOSTS = ['*']
 
 INSTALLED_APPS = [
-    # Jazmin لازم تكون قبل الـ admin عشان تغير شكلها
     'jazzmin',
-    
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
-    # المكتبات المطلوبة للربط
     'rest_framework',
-    'rest_framework.authtoken', # ضفتلك دي عشان نظام الـ Login
+    'rest_framework.authtoken',
     'corsheaders',
-    
-    # الـ App الخاص بمشروعك
     'api',
 ]
 
@@ -66,7 +60,6 @@ DATABASES = {
     }
 }
 
-# إعدادات الـ Rest Framework لنظام الـ Token
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.TokenAuthentication',
@@ -80,8 +73,7 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',},
 ]
 
-# --- ضبط الوقت ليكون بتوقيت القاهرة/أفريقيا ---
-LANGUAGE_CODE = 'ar' # خليته عربي عشان Jazmin تظهر بالعربي لو حبيت
+LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'Africa/Cairo'
 USE_I18N = True
 USE_TZ = True
@@ -90,31 +82,24 @@ STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'artifact_backend' / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# --- إعدادات الميديا (الصور اللي هترفعها للتماثيل) ---
-
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 CORS_ALLOW_ALL_ORIGINS = True
 
-
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-
-# --- إعدادات Jazmin (Dashboard) ---
 JAZMIN_SETTINGS = {
-    "site_title": "لوحة تحكم مشروع التماثيل",
+    "site_title": "Artifact AI Admin",
     "site_header": "Egyptian Statues",
     "site_brand": "Artifact AI",
-    "welcome_sign": "مرحباً بك يا يوسف في لوحة التحكم",
+    "welcome_sign": "Welcome back, Yousef",
     "copyright": "Yousef Osama - 2026",
     "search_model": ["auth.User", "api.Statue"],
     "show_sidebar": True,
     "navigation_expanded": True,
     "topmenu_links": [
-        {"name": "الرئيسية", "url": "admin:index", "permissions": ["auth.view_user"]},
+        {"name": "Home", "url": "admin:index", "permissions": ["auth.view_user"]},
     ],
     "icons": {
         "auth": "fas fa-users-cog",
