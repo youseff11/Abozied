@@ -3,40 +3,64 @@ import base64
 import logging
 from rest_framework.decorators import api_view, permission_classes, parser_classes
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny # ضفنا AllowAny
 from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.authtoken.models import Token # مهمة للـ Token
+from django.contrib.auth.models import User
 from .models import Statue, SearchHistory
-from .serializers import StatueSerializer
+from .serializers import StatueSerializer, UserSerializer
 
-# إعداد الـ Logger
 logger = logging.getLogger(__name__)
 
-# بيانات مشروع Roboflow
 ROBOFLOW_API_KEY = "0Q95f8rFPiohq2RfJuR9"
 MODEL_ID = "egyptian-statues/4" 
 
+# --- 1. دالة تسجيل مستخدم جديد ---
 @api_view(['POST'])
-@permission_classes([IsAuthenticated]) # أضفنا دي عشان نضمن إن اللي بيبحث لازم يكون عامل Login
-@parser_classes([MultiPartParser, FormParser]) # لضمان معالجة الصور المرفوعة من Flutter بشكل صحيح
-def predict_artifact(request):
-    """
-    تستلم الصورة، ترسلها لـ Roboflow، تبحث عن النتيجة في الداتابيز، 
-    وتسجل العملية في سجل البحث الخاص بالمستخدم الحالي.
-    """
-    
-    # 1. التأكد من وجود ملف الصورة
-    if 'image' not in request.FILES:
+@permission_classes([AllowAny]) # مسموح للكل عشان يعملوا حساب
+def register_user(request):
+    serializer = UserSerializer(data=request.data)
+    if serializer.is_valid():
+        user = serializer.save()
+        # أول ما يسجل بنعمله Token فوراً عشان يفتح فلاتر
+        token, created = Token.objects.get_or_create(user=user)
         return Response({
-            "success": False, 
-            "message": "لم يتم استلام صورة."
-        }, status=400)
+            "success": True,
+            "token": token.key,
+            "username": user.username
+        }, status=201)
+    return Response(serializer.errors, status=400)
+
+# --- 2. دالة تسجيل الدخول (Login) ---
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def login_user(request):
+    from django.contrib.auth import authenticate
+    username = request.data.get('username')
+    password = request.data.get('password')
+    user = authenticate(username=username, password=password)
+    if user:
+        token, created = Token.objects.get_or_create(user=user)
+        return Response({
+            "success": True, 
+            "token": token.key,
+            "username": user.username
+        }, status=200)
+    return Response({"success": False, "message": "Invalid Credentials"}, status=401)
+
+# --- 3. دالة التنبؤ بالتمثال ---
+@api_view(['POST'])
+@permission_classes([IsAuthenticated]) # لازم يكون مسجل دخول
+@parser_classes([MultiPartParser, FormParser])
+def predict_artifact(request):
+    if 'image' not in request.FILES:
+        return Response({"success": False, "message": "لم يتم استلام صورة."}, status=400)
 
     try:
         image_file = request.FILES['image']
         image_bytes = image_file.read()
         image_base64 = base64.b64encode(image_bytes).decode('utf-8')
 
-        # 2. إرسال طلب Roboflow
         rf_url = f"https://classify.roboflow.com/{MODEL_ID}?api_key={ROBOFLOW_API_KEY}"
         response = requests.post(
             rf_url, 
@@ -54,20 +78,13 @@ def predict_artifact(request):
                 label_name = top['class']
                 confidence = top['confidence'] * 100
                 
-                # فلترة الهبد
                 if label_name.lower() == 'unknown' or confidence < 95: 
-                    return Response({
-                        "success": False, 
-                        "message": "عذراً، هذا التمثال غير مدعوم حالياً أو الصورة غير واضحة."
-                    }, status=200)
+                    return Response({"success": False, "message": "عذراً، هذا التمثال غير مدعوم حالياً."}, status=200)
 
-                # 3. البحث عن بيانات التمثال في الداتابيز
                 try:
                     statue_obj = Statue.objects.get(name=label_name)
                     statue_data = StatueSerializer(statue_obj).data
                     
-                    # 4. تسجيل العملية في السجل (Search History) 
-                    # بما أننا استخدمنا IsAuthenticated، فـ request.user مضمون وجوده
                     SearchHistory.objects.create(
                         user=request.user,
                         statue=statue_obj,
@@ -81,17 +98,10 @@ def predict_artifact(request):
                         "confidence": round(confidence, 1),
                         "data": statue_data
                     }, status=200)
-
                 except Statue.DoesNotExist:
-                    return Response({
-                        "success": False,
-                        "message": f"تم التعرف على {label_name} ولكن بياناته غير مسجلة في الداتابيز."
-                    }, status=200)
+                    return Response({"success": False, "message": f"التمثال {label_name} غير مسجل."}, status=200)
             
-            return Response({"success": False, "message": "لم يتم العثور على نتائج."}, status=200)
-
-        return Response({"success": False, "message": "API Error from Roboflow"}, status=500)
-
+            return Response({"success": False, "message": "لا توجد نتائج."}, status=200)
+        return Response({"success": False, "message": "Roboflow Error"}, status=500)
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
         return Response({"success": False, "message": f"خطأ داخلي: {str(e)}"}, status=500)
