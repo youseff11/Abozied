@@ -2,29 +2,33 @@ from rest_framework import serializers
 from django.contrib.auth.models import User
 from .models import Statue, SearchHistory
 
-# 1. Serializer للمستخدم (للتسجيل واللوجن)
+
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'password']
-        extra_kwargs = {'password': {'write_only': True}} # الباسورد يتبعت بس مش بيرجع في الـ JSON للأمان
+        extra_kwargs = {'password': {'write_only': True}}
 
     def create(self, validated_data):
-        # تشفير الباسورد قبل الحفظ في الداتابيز
-        user = User.objects.create_user(**validated_data)
-        return user
+        return User.objects.create_user(**validated_data)
 
-# 2. Serializer لبيانات التماثيل
+
 class StatueSerializer(serializers.ModelSerializer):
     class Meta:
         model = Statue
-        fields = '__all__' # هيبعت كل الخانات (الاسم، العصر، الوصف، إلخ)
+        fields = '__all__'
 
-# 3. Serializer لسجل البحث (History)
+
 class SearchHistorySerializer(serializers.ModelSerializer):
-    # هنا بنقول للديجانجو يرجع بيانات التمثال كاملة جوه الهيستوري مش مجرد الـ ID بتاعه
     statue_details = StatueSerializer(source='statue', read_only=True)
-    
+    image_url = serializers.SerializerMethodField()
+
     class Meta:
         model = SearchHistory
-        fields = ['id', 'statue', 'statue_details', 'image_searched', 'confidence', 'created_at']
+        fields = ['id', 'statue', 'statue_details', 'image_url', 'confidence', 'created_at']
+
+    def get_image_url(self, obj):
+        request = self.context.get('request')
+        if obj.image_searched and request:
+            return request.build_absolute_uri(obj.image_searched.url)
+        return None
