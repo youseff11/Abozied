@@ -1,7 +1,8 @@
 from django.urls import path
-from . import views 
+from . import views
 
 urlpatterns = [
-    path('predict/', views.predict_artifact, name='predict_artifact'),
-    path('register/', views.register_user, name='register'),
+    path('register/', views.register_user,   name='register'),
+    path('login/',    views.login_user,       name='login'),      # ✅ كان ناقص!
+    path('predict/',  views.predict_artifact, name='predict'),
 ]
