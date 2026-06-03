@@ -1,5 +1,4 @@
 import requests
-import base64
 import logging
 from rest_framework.decorators import api_view, permission_classes, parser_classes
 from rest_framework.response import Response
@@ -12,8 +11,8 @@ from .serializers import StatueSerializer, UserSerializer, SearchHistorySerializ
 
 logger = logging.getLogger(__name__)
 
-ROBOFLOW_API_KEY = "0Q95f8rFPiohq2RfJuR9"
-MODEL_ID = "egyptian-statues/4"
+# الرابط الفعلي الجديد للـ AI Model بناءً على توثيق الـ Swagger الخاص بك
+AI_MODEL_URL = "https://hamodyyy1-statue-recognition-api.hf.space/api/v1/predict"
 
 
 # --- 1. تسجيل مستخدم جديد ---
@@ -50,7 +49,7 @@ def login_user(request):
     return Response({"success": False, "message": "Invalid Credentials"}, status=401)
 
 
-# --- 3. التنبؤ بالتمثال + حفظ في السجل ---
+# --- 3. التنبؤ بالتمثال (باستخدام نموذج FastAPI الجديد) + حفظ في السجل ---
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 @parser_classes([MultiPartParser, FormParser])
@@ -60,68 +59,73 @@ def predict_artifact(request):
 
     try:
         image_file = request.FILES['image']
-        image_bytes = image_file.read()
-        image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+        
+        # تجهيز الملف بصيغة الثنائي (Bytes) لإرساله كـ Multipart Form للـ FastAPI
+        files = {
+            'file': (image_file.name, image_file.read(), image_file.content_type)
+        }
 
-        rf_url = f"https://classify.roboflow.com/{MODEL_ID}?api_key={ROBOFLOW_API_KEY}"
-        response = requests.post(
-            rf_url,
-            data=image_base64,
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-            timeout=15
-        )
+        # إرسال طلب الـ POST لخادم الـ AI Model الجديد مع تحديد وقت انتهاء (Timeout) مناسب لمعالجة الصور
+        response = requests.post(AI_MODEL_URL, files=files, timeout=25)
 
         if response.status_code == 200:
             res = response.json()
-            predictions = res.get('predictions', [])
+            
+            # استخراج اسم الكلاس ونسبة التأكد من الـ Response الخاص بـ FastAPI
+            label_name = res.get('label')
+            confidence = res.get('confidence', 0)
 
-            if predictions:
-                top = predictions[0]
-                label_name = top['class']
-                confidence = top['confidence'] * 100
+            # لو النسبة جاية كـ كسر عشري (Decimal مثل 0.95)، نضربها في 100 لتصبح نسبة مئوية (95.0)
+            if confidence <= 1.0:
+                confidence = confidence * 100
 
-                if label_name.lower() == 'unknown' or confidence < 95:
-                    return Response({
-                        "success": False,
-                        "message": "عذراً، هذا التمثال غير مدعوم حالياً."
-                    }, status=200)
+            # شروط التحقق من جودة النتيجة والتعرف عليها
+            if not label_name or label_name.lower() == 'unknown' or confidence < 85:
+                return Response({
+                    "success": False,
+                    "message": "عذراً، لم يتم التعرف على التمثال أو أنه غير مدعوم حالياً."
+                }, status=200)
 
-                try:
-                    statue_obj = Statue.objects.get(name=label_name)
-                    statue_data = StatueSerializer(statue_obj).data
+            # مراجعة قاعدة بيانات الـ Django لمطابقة الـ label المرجوع بالبيانات المخزنة عندك
+            try:
+                statue_obj = Statue.objects.get(name=label_name)
+                statue_data = StatueSerializer(statue_obj).data
 
-                    # ✅ حفظ في سجل البحث
-                    image_file.seek(0)
-                    SearchHistory.objects.create(
-                        user=request.user,
-                        statue=statue_obj,
-                        image_searched=image_file,
-                        confidence=confidence
-                    )
+                # إعادة مؤشر الملف لأوله قبل الحفظ في الـ ImageField لضمان عدم تلف الصورة
+                image_file.seek(0)
+                SearchHistory.objects.create(
+                    user=request.user,
+                    statue=statue_obj,
+                    image_searched=image_file,
+                    confidence=confidence
+                )
 
-                    return Response({
-                        "success": True,
-                        "label": label_name,
-                        "confidence": round(confidence, 1),
-                        "data": statue_data
-                    }, status=200)
+                return Response({
+                    "success": True,
+                    "label": label_name,
+                    "confidence": round(confidence, 1),
+                    "data": statue_data
+                }, status=200)
 
-                except Statue.DoesNotExist:
-                    return Response({
-                        "success": False,
-                        "message": f"التمثال '{label_name}' غير مسجل في قاعدة البيانات."
-                    }, status=200)
+            except Statue.DoesNotExist:
+                return Response({
+                    "success": False,
+                    "message": f"التمثال '{label_name}' تم التعرف عليه ولكن غير مسجل في قاعدة البيانات المحلية."
+                }, status=200)
 
-            return Response({"success": False, "message": "لا توجد نتائج."}, status=200)
+        return Response({
+            "success": False, 
+            "message": f"خطأ من خادم الـ AI الخارجي: {response.status_code}"
+        }, status=500)
 
-        return Response({"success": False, "message": "Roboflow API Error"}, status=500)
-
+    except requests.exceptions.Timeout:
+        return Response({"success": False, "message": "انتهت مهلة الاتصال بخادم الـ AI الخارجي."}, status=54)
     except Exception as e:
         logger.error(f"predict_artifact error: {e}")
         return Response({"success": False, "message": f"خطأ داخلي: {str(e)}"}, status=500)
 
 
-# --- 4. ✅ جلب سجل البحث للمستخدم ---
+# --- 4. جلب سجل البحث للمستخدم ---
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_search_history(request):
@@ -133,7 +137,7 @@ def get_search_history(request):
     }, status=200)
 
 
-# --- 5. ✅ بيانات المستخدم الحالي ---
+# --- 5. بيانات المستخدم الحالي ---
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_profile(request):
