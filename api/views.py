@@ -60,9 +60,9 @@ def predict_artifact(request):
     try:
         image_file = request.FILES['image']
         
-        # تجهيز الملف بصيغة الثنائي (Bytes) لإرساله كـ Multipart Form للـ FastAPI
+        # ✅ تم التعديل هنا: استخدام المفتاح 'image' بدلاً من 'file' ليتطابق قاطعاً مع الـ FastAPI
         files = {
-            'file': (image_file.name, image_file.read(), image_file.content_type)
+            'image': (image_file.name, image_file.read(), image_file.content_type)
         }
 
         # إرسال طلب الـ POST لخادم الـ AI Model الجديد مع تحديد وقت انتهاء (Timeout) مناسب لمعالجة الصور
@@ -119,7 +119,7 @@ def predict_artifact(request):
         }, status=500)
 
     except requests.exceptions.Timeout:
-        return Response({"success": False, "message": "انتهت مهلة الاتصال بخادم الـ AI الخارجي."}, status=54)
+        return Response({"success": False, "message": "انتهت مهلة الاتصال بخادم الـ AI الخارجي."}, status=504)
     except Exception as e:
         logger.error(f"predict_artifact error: {e}")
         return Response({"success": False, "message": f"خطأ داخلي: {str(e)}"}, status=500)
