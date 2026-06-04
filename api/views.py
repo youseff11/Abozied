@@ -8,7 +8,8 @@ from rest_framework.authtoken.models import Token
 from django.contrib.auth.models import User
 from .models import Statue, SearchHistory
 from .serializers import StatueSerializer, UserSerializer, SearchHistorySerializer
-
+from .models import Landmark
+from .serializers import LandmarkSerializer
 logger = logging.getLogger(__name__)
 
 # الرابط الفعلي للـ AI Model بناءً على توثيق الـ Swagger الخاص بك
@@ -176,4 +177,15 @@ def get_profile(request):
         "email": user.email,
         "history_count": history_count,
         "date_joined": user.date_joined.strftime("%Y-%m-%d"),
+    }, status=200)
+
+# جلب المعالم المصريه
+@api_view(['GET'])
+@permission_classes([IsAuthenticated]) # أو AllowAny لو عايزها تظهر للزوار
+def get_landmarks(request):
+    landmarks = Landmark.objects.all()
+    serializer = LandmarkSerializer(landmarks, many=True, context={'request': request})
+    return Response({
+        "success": True,
+        "landmarks": serializer.data
     }, status=200)
