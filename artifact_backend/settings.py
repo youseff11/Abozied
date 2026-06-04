@@ -5,7 +5,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = 'django-insecure-!z!c#ve8s-ijx29i=)qj(f@%^58o2zj@ffflfq&g$yf8@m4w(s'
 
-DEBUG = True  # غيّره لـ False في البيئة الإنتاجية
+DEBUG = True  
 
 ALLOWED_HOSTS = ['*']
 
@@ -18,13 +18,13 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
-    'rest_framework.authtoken',  # ✅ مهم جداً للـ Token Authentication
+    'rest_framework.authtoken',  
     'corsheaders',
     'api',
 ]
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',   # ✅ لازم يكون أول حاجة
+    'corsheaders.middleware.CorsMiddleware',  
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',

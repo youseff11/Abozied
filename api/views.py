@@ -119,6 +119,15 @@ def predict_artifact(request):
                 closest = res.get('closest_match', {}) or {}
                 closest_name = closest.get('name', 'غير محدد')
 
+                # ✅ التعديل هنا: حفظ العملية في السجل حتى لو كانت "عصر تاريخي" فقط
+                image_file.seek(0)
+                SearchHistory.objects.create(
+                    user=request.user,
+                    statue=None, # نتركه فارغاً لأنه لم يتعرف على تمثال محدد في الداتا بيز
+                    image_searched=image_file,
+                    confidence=confidence
+                )
+
                 # بناء هيكل بيانات مرن يتناسب مع الـ ResultScreen في الفلاتر لمنع أي Crash أونلاين
                 fallback_data = {
                     "label_ar": f"عصر: {era_name_ar}",
