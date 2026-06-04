@@ -34,12 +34,30 @@ class SearchHistoryAdmin(admin.ModelAdmin):
 
 
 # --- إعدادات المعالم الجديدة والصور المتعددة ---
+
 class LandmarkImageInline(admin.TabularInline):
     model = LandmarkImage
     extra = 1 # بيفتحلك خانة فاضية دايماً لرفع صورة جديدة
+    readonly_fields = ('display_image_preview',) # لعرض الصورة المرفوعة داخل صفحة المعلم
+
+    def display_image_preview(self, obj):
+        if obj.image:
+            return format_html('<img src="{}" style="width: 80px; height: auto; border-radius: 8px; border: 1px solid #ddd;" />', obj.image.url)
+        return "لا توجد صورة"
+    display_image_preview.short_description = 'معاينة الصورة'
+
 
 @admin.register(Landmark)
 class LandmarkAdmin(admin.ModelAdmin):
-    list_display = ('title_ar', 'title_en', 'created_at')
+    # إضافة صورة العرض الرئيسية في الجدول الخارجي
+    list_display = ('title_ar', 'title_en', 'display_first_image', 'created_at')
     search_fields = ('title_ar', 'title_en')
-    inlines = [LandmarkImageInline] 
+    inlines = [LandmarkImageInline]
+
+    def display_first_image(self, obj):
+        # جلب أول صورة مرتبطة بهذا المعلم لعرضها في الجدول
+        first_image = obj.images.first() 
+        if first_image and first_image.image:
+            return format_html('<img src="{}" style="width: 60px; height: auto; border-radius: 8px; border: 1px solid #ddd;" />', first_image.image.url)
+        return "لا توجد صورة"
+    display_first_image.short_description = 'صورة العرض'
