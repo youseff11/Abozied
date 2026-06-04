@@ -60,27 +60,29 @@ def predict_artifact(request):
     try:
         image_file = request.FILES['image']
         
-        # ✅ تم التعديل هنا: استخدام المفتاح 'image' بدلاً من 'file' ليتطابق قاطعاً مع الـ FastAPI
+        # استخدام المفتاح 'image' المعتمد قاطعاً مع الـ FastAPI
         files = {
             'image': (image_file.name, image_file.read(), image_file.content_type)
         }
 
-        # إرسال طلب الـ POST لخادم الـ AI Model الجديد مع تحديد وقت انتهاء (Timeout) مناسب لمعالجة الصور
+        # إرسال طلب الـ POST لخادم الـ AI Model الجديد
         response = requests.post(AI_MODEL_URL, files=files, timeout=25)
 
         if response.status_code == 200:
             res = response.json()
             
-            # استخراج اسم الكلاس ونسبة التأكد من الـ Response الخاص بـ FastAPI
-            label_name = res.get('label')
+            # ✅ تم التعديل هنا: قراءة البيانات بطريقة صحيحة تتبع بنية الـ JSON المستخرج من Postman
+            statue_info = res.get('statue_info', {})
+            label_name = statue_info.get('name_en')  # استخراج الكود الإنجليزي (مثل Akhenaten) لـلـمـطـابـقـة
+            
             confidence = res.get('confidence', 0)
 
-            # لو النسبة جاية كـ كسر عشري (Decimal مثل 0.95)، نضربها في 100 لتصبح نسبة مئوية (95.0)
+            # لو النسبة جاية كـ كسر عشري (Decimal مثل 0.99)، نضربها في 100 لتصبح نسبة مئوية (99.0)
             if confidence <= 1.0:
                 confidence = confidence * 100
 
-            # شروط التحقق من جودة النتيجة والتعرف عليها
-            if not label_name or label_name.lower() == 'unknown' or confidence < 85:
+            # شروط التحقق من جودة النتيجة مع تقليل الـ Threshold لتسهيل الاختبار والمناقشة
+            if not label_name or label_name.lower() == 'unknown' or confidence < 60:
                 return Response({
                     "success": False,
                     "message": "عذراً، لم يتم التعرف على التمثال أو أنه غير مدعوم حالياً."
