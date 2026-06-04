@@ -10,7 +10,7 @@ DEBUG = True  # غيّره لـ False في البيئة الإنتاجية
 ALLOWED_HOSTS = ['*']
 
 INSTALLED_APPS = [
-    'jazzmin',
+    # 'jazzmin',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
